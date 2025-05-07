@@ -1,92 +1,99 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import keras
-from tensorflow.keras.utils import to_categorical
-from keras.models import Sequential, load_model
-from keras import backend as K
 import os
 import time
 import io
 from PIL import Image
 import plotly.express as px
+import tensorflow as tf
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.models import Sequential, load_model
 
+# Настройки путей
 MODELSPATH = './models/'
 DATAPATH = './data/'
 
+# Инициализация Keras backend
+K = tf.keras.backend
 
 def render_header():
     st.write("""
         <p align="center"> 
-            <H1> Skin cancer Analyzer 
+            <H1> Skin cancer Analyzer </H1>
         </p>
-
     """, unsafe_allow_html=True)
 
 
-@st.cache
+@st.cache_data
 def load_mekd():
     img = Image.open(DATAPATH + '/ISIC_0024312.jpg')
     return img
 
 
-@st.cache
+@st.cache_data
 def data_gen(x):
-    img = np.asarray(Image.open(x).resize((100, 75)))
-    x_test = np.asarray(img.tolist())
+    """Обработка загруженного изображения"""
+    img = Image.open(x).convert('RGB').resize((100, 75))
+    x_test = np.asarray(img)
     x_test_mean = np.mean(x_test)
     x_test_std = np.std(x_test)
     x_test = (x_test - x_test_mean) / x_test_std
     x_validate = x_test.reshape(1, 75, 100, 3)
-
     return x_validate
 
 
-@st.cache
+@st.cache_data
 def data_gen_(img):
-    img = img.reshape(100, 75)
-    x_test = np.asarray(img.tolist())
+    """Для работы с массивом изображения"""
+    img = img.resize((100, 75))
+    x_test = np.array(img)
     x_test_mean = np.mean(x_test)
     x_test_std = np.std(x_test)
     x_test = (x_test - x_test_mean) / x_test_std
     x_validate = x_test.reshape(1, 75, 100, 3)
-
     return x_validate
 
 
 def load_models():
-
     model = load_model(MODELSPATH + 'model.h5')
     return model
 
 
-@st.cache
+@st.cache_data
 def predict(x_test, model):
     Y_pred = model.predict(x_test)
     ynew = model.predict_proba(x_test)
     K.clear_session()
     ynew = np.round(ynew, 2)
-    ynew = ynew*100
+    ynew = ynew * 100
     y_new = ynew[0].tolist()
     Y_pred_classes = np.argmax(Y_pred, axis=1)
     K.clear_session()
     return y_new, Y_pred_classes
 
 
-@st.cache
+@st.cache_data
 def display_prediction(y_new):
-    """Display image and preditions from model"""
-
+    """Отображение предсказаний модели"""
     result = pd.DataFrame({'Probability': y_new}, index=np.arange(7))
     result = result.reset_index()
     result.columns = ['Classes', 'Probability']
-    lesion_type_dict = {2: 'Benign keratosis-like lesions', 4: 'Melanocytic nevi', 3: 'Dermatofibroma',
-                        5: 'Melanoma', 6: 'Vascular lesions', 1: 'Basal cell carcinoma', 0: 'Actinic keratoses'}
+    lesion_type_dict = {
+        2: 'Benign keratosis-like lesions',
+        4: 'Melanocytic nevi',
+        3: 'Dermatofibroma',
+        5: 'Melanoma',
+        6: 'Vascular lesions',
+        1: 'Basal cell carcinoma',
+        0: 'Actinic keratoses'
+    }
     result["Classes"] = result["Classes"].map(lesion_type_dict)
     return result
 
 
 def main():
+    render_header()
     st.sidebar.header('Skin cancer Analyzer')
     st.sidebar.subheader('Choose a page to proceed:')
     page = st.sidebar.selectbox("", ["Sample Data", "Upload Your Image"])
@@ -103,8 +110,8 @@ def main():
         movies_chosen = st.multiselect('Choose Sample Data', mov_base)
 
         if len(movies_chosen) > 1:
-            st.error('Please select Sample Data')
-        if len(movies_chosen) == 1:
+            st.error('Please select only one sample')
+        elif len(movies_chosen) == 1:
             st.success("You have selected Sample Data")
         else:
             st.info('Please select Sample Data')
@@ -124,12 +131,10 @@ def main():
                         result = display_prediction(y_new)
                         st.write(result)
                         if st.checkbox('Display Probability Graph'):
-                            fig = px.bar(result, x="Classes",
-                                         y="Probability", color='Classes')
+                            fig = px.bar(result, x="Classes", y="Probability", color='Classes')
                             st.plotly_chart(fig, use_container_width=True)
 
-    if page == "Upload Your Image":
-
+    elif page == "Upload Your Image":
         st.header("Upload Your Image")
 
         file_path = st.file_uploader('Upload an image', type=['png', 'jpg'])
@@ -138,15 +143,14 @@ def main():
             x_test = data_gen(file_path)
             image = Image.open(file_path)
             img_array = np.array(image)
-
             st.success('File Upload Success!!')
         else:
-            st.info('Please upload Image file')
+            st.info('Please upload an image file (.png or .jpg)')
+            return
 
         if st.checkbox('Show Uploaded Image'):
             st.info("Showing Uploaded Image ---->>>")
-            st.image(img_array, caption='Uploaded Image',
-                     use_column_width=True)
+            st.image(img_array, caption='Uploaded Image', use_column_width=True)
             st.subheader("Choose Training Algorithm!")
             if st.checkbox('Keras'):
                 model = load_models()
@@ -156,8 +160,7 @@ def main():
                     result = display_prediction(y_new)
                     st.write(result)
                     if st.checkbox('Display Probability Graph'):
-                        fig = px.bar(result, x="Classes",
-                                     y="Probability", color='Classes')
+                        fig = px.bar(result, x="Classes", y="Probability", color='Classes')
                         st.plotly_chart(fig, use_container_width=True)
 
 
